@@ -45,8 +45,10 @@ import IconDisplay, { WithIcons } from "./IconDisplay";
 
 interface SidebarProps {
   connectionStatus: ConnectionStatus;
-  transportType: "stdio" | "sse" | "streamable-http";
-  setTransportType: (type: "stdio" | "sse" | "streamable-http") => void;
+  transportType: "stdio" | "sse" | "streamable-http" | "json-rpc";
+  setTransportType: (
+    type: "stdio" | "sse" | "streamable-http" | "json-rpc",
+  ) => void;
   command: string;
   setCommand: (command: string) => void;
   args: string;
@@ -156,6 +158,13 @@ const Sidebar = ({
         note: "For Streamable HTTP connections, add this URL directly in your MCP Client",
       };
     }
+    if (transportType === "json-rpc") {
+      return {
+        type: "json-rpc",
+        url: sseUrl,
+        note: "For generic JSON-RPC HTTP endpoints (non-MCP compliant servers)",
+      };
+    }
     return {};
   }, [transportType, command, args, env, sseUrl]);
 
@@ -255,9 +264,9 @@ const Sidebar = ({
             </label>
             <Select
               value={transportType}
-              onValueChange={(value: "stdio" | "sse" | "streamable-http") =>
-                setTransportType(value)
-              }
+              onValueChange={(
+                value: "stdio" | "sse" | "streamable-http" | "json-rpc",
+              ) => setTransportType(value)}
             >
               <SelectTrigger id="transport-type-select">
                 <SelectValue placeholder="Select transport type" />
@@ -266,6 +275,7 @@ const Sidebar = ({
                 <SelectItem value="stdio">STDIO</SelectItem>
                 <SelectItem value="sse">SSE</SelectItem>
                 <SelectItem value="streamable-http">Streamable HTTP</SelectItem>
+                <SelectItem value="json-rpc">JSON-RPC (Generic)</SelectItem>
               </SelectContent>
             </Select>
           </div>

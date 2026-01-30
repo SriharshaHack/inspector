@@ -76,9 +76,10 @@ import { InspectorConfig } from "../configurationTypes";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { CustomHeaders } from "../types/customHeaders";
 import { resolveRefsInMessage } from "@/utils/schemaUtils";
+import { JsonRpcTransport } from "../transports/JsonRpcTransport";
 
 interface UseConnectionOptions {
-  transportType: "stdio" | "sse" | "streamable-http";
+  transportType: "stdio" | "sse" | "streamable-http" | "json-rpc";
   command: string;
   args: string;
   sseUrl: string;
@@ -566,7 +567,11 @@ export function useConnection({
       // Create appropriate transport
       let transportOptions:
         | StreamableHTTPClientTransportOptions
-        | SSEClientTransportOptions;
+        | SSEClientTransportOptions
+        | undefined;
+
+      // For json-rpc, we need different headers handling
+      let jsonRpcHeaders: HeadersInit | undefined;
 
       let serverUrl: URL;
 
@@ -635,6 +640,12 @@ export function useConnection({
                 maxRetries: 2,
               },
             };
+            break;
+
+          case "json-rpc":
+            // For JSON-RPC, we use a simple transport without MCP protocol requirements
+            jsonRpcHeaders = { ...requestHeaders };
+            transportOptions = undefined; // Not used for JsonRpcTransport
             break;
         }
       } else {
@@ -740,6 +751,16 @@ export function useConnection({
               },
             };
             break;
+
+          case "json-rpc":
+            // JSON-RPC via proxy
+            mcpProxyServerUrl = new URL(
+              `${getMCPProxyAddress(config)}/json-rpc`,
+            );
+            mcpProxyServerUrl.searchParams.append("url", sseUrl);
+            jsonRpcHeaders = { ...headers, ...proxyHeaders };
+            transportOptions = undefined; // Not used for JsonRpcTransport
+            break;
         }
         serverUrl = mcpProxyServerUrl as URL;
         serverUrl.searchParams.append("transportType", transportType);
@@ -768,13 +789,21 @@ export function useConnection({
 
       let capabilities;
       try {
-        const transport =
-          transportType === "streamable-http"
-            ? new StreamableHTTPClientTransport(serverUrl, {
-                sessionId: undefined,
-                ...transportOptions,
-              })
-            : new SSEClientTransport(serverUrl, transportOptions);
+        let transport: Transport;
+        if (transportType === "json-rpc") {
+          // Use simple JSON-RPC transport for generic HTTP endpoints
+          transport = new JsonRpcTransport(serverUrl, {
+            headers: jsonRpcHeaders,
+            timeout: getMCPServerRequestTimeout(config),
+          });
+        } else if (transportType === "streamable-http") {
+          transport = new StreamableHTTPClientTransport(serverUrl, {
+            sessionId: undefined,
+            ...transportOptions,
+          });
+        } else {
+          transport = new SSEClientTransport(serverUrl, transportOptions!);
+        }
 
         await client.connect(transport as Transport);
 

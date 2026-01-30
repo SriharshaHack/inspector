@@ -143,7 +143,7 @@ const App = () => {
 
   const [sseUrl, setSseUrl] = useState<string>(getInitialSseUrl);
   const [transportType, setTransportType] = useState<
-    "stdio" | "sse" | "streamable-http"
+    "stdio" | "sse" | "streamable-http" | "json-rpc"
   >(getInitialTransportType);
   const [connectionType, setConnectionType] = useState<"direct" | "proxy">(
     () => {
@@ -668,7 +668,11 @@ const App = () => {
         }
         if (data.defaultTransport) {
           setTransportType(
-            data.defaultTransport as "stdio" | "sse" | "streamable-http",
+            data.defaultTransport as
+              | "stdio"
+              | "sse"
+              | "streamable-http"
+              | "json-rpc",
           );
         }
         if (data.defaultServerUrl) {

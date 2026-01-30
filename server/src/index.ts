@@ -194,6 +194,12 @@ const originValidationMiddleware = (
     defaultOrigin,
   ];
 
+  // Allow all origins if "*" is in the list (useful for testing/development)
+  if (allowedOrigins.includes("*")) {
+    next();
+    return;
+  }
+
   if (origin && !allowedOrigins.includes(origin)) {
     console.error(`Invalid origin: ${origin}`);
     res.status(403).json({
@@ -569,6 +575,113 @@ app.delete(
         console.error("Error in /mcp route:", error);
         res.status(500).json(error);
       }
+    }
+  },
+);
+
+// JSON-RPC proxy endpoint for generic HTTP JSON-RPC endpoints
+// This is a simple passthrough that doesn't require MCP protocol compliance
+// It also fakes MCP initialization responses for non-MCP servers
+app.post(
+  "/json-rpc",
+  originValidationMiddleware,
+  authMiddleware,
+  express.json(),
+  async (req, res) => {
+    try {
+      const url = req.query.url as string;
+      if (!url) {
+        res.status(400).json({ error: "Missing 'url' query parameter" });
+        return;
+      }
+
+      const requestBody = req.body;
+      console.log(`JSON-RPC proxy request: ${requestBody.method}`);
+
+      // Handle MCP initialization locally - fake it for non-MCP servers
+      if (requestBody.method === "initialize") {
+        res.json({
+          jsonrpc: "2.0",
+          id: requestBody.id,
+          result: {
+            protocolVersion: "2024-11-05",
+            serverInfo: {
+              name: "Generic JSON-RPC Server",
+              version: "1.0.0",
+            },
+            capabilities: {
+              tools: {},
+            },
+          },
+        });
+        return;
+      }
+
+      // Handle notifications (no response expected)
+      // These are fire-and-forget - don't forward them to servers that don't support them
+      if (
+        requestBody.method === "notifications/initialized" ||
+        requestBody.method?.startsWith("notifications/")
+      ) {
+        res.status(204).end();
+        return;
+      }
+
+      // Get headers to forward
+      const forwardHeaders = getHttpHeaders(req);
+      forwardHeaders["Content-Type"] = "application/json";
+      forwardHeaders["Accept"] = "application/json";
+
+      // Forward the request to the target server
+      const response = await fetch(url, {
+        method: "POST",
+        headers: forwardHeaders as Record<string, string>,
+        body: JSON.stringify(requestBody),
+      });
+
+      const contentType = response.headers.get("content-type") || "";
+      const responseText = await response.text();
+
+      // Try to parse as JSON
+      let jsonResponse;
+      try {
+        jsonResponse = JSON.parse(responseText);
+      } catch {
+        // If not valid JSON, return as error
+        res.status(502).json({
+          jsonrpc: "2.0",
+          error: {
+            code: -32600,
+            message: "Invalid JSON response from server",
+            data: responseText.substring(0, 500),
+          },
+          id: requestBody.id ?? null,
+        });
+        return;
+      }
+
+      // Ensure the response has properly formatted JSON-RPC 2.0 structure
+      // Some servers don't include the jsonrpc field which is required by the MCP SDK
+      if (!jsonResponse.jsonrpc) {
+        jsonResponse.jsonrpc = "2.0";
+      }
+
+      // Forward the response with same status code
+      res.status(response.status);
+      if (contentType) {
+        res.setHeader("Content-Type", contentType);
+      }
+      res.json(jsonResponse);
+    } catch (error) {
+      console.error("Error in /json-rpc route:", error);
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+        id: req.body?.id ?? null,
+      });
     }
   },
 );

@@ -61,16 +61,23 @@ export const getMCPTaskTtl = (config: InspectorConfig): number => {
 export const getInitialTransportType = ():
   | "stdio"
   | "sse"
-  | "streamable-http" => {
+  | "streamable-http"
+  | "json-rpc" => {
   const param = getSearchParam("transport");
-  if (param === "stdio" || param === "sse" || param === "streamable-http") {
+  if (
+    param === "stdio" ||
+    param === "sse" ||
+    param === "streamable-http" ||
+    param === "json-rpc"
+  ) {
     return param;
   }
   return (
     (localStorage.getItem("lastTransportType") as
       | "stdio"
       | "sse"
-      | "streamable-http") || "stdio"
+      | "streamable-http"
+      | "json-rpc") || "stdio"
   );
 };
 
