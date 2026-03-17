@@ -8,8 +8,8 @@ import {
 import "@testing-library/jest-dom";
 import { describe, it, beforeEach, jest } from "@jest/globals";
 import AuthDebugger, { AuthDebuggerProps } from "../AuthDebugger";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { SESSION_KEYS } from "@/lib/constants";
+import { TooltipProvider } from "../ui/tooltip";
+import { SESSION_KEYS } from "../../lib/constants";
 
 const mockOAuthTokens = {
   access_token: "test_access_token",
@@ -55,7 +55,7 @@ import {
   discoverOAuthProtectedResourceMetadata,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import { OAuthMetadata } from "@modelcontextprotocol/sdk/shared/auth.js";
-import { EMPTY_DEBUGGER_STATE } from "@/lib/auth-types";
+import { EMPTY_DEBUGGER_STATE } from "../../lib/auth-types";
 
 // Mock local auth module
 jest.mock("@/lib/auth", () => ({
@@ -106,7 +106,7 @@ jest.mock("@/lib/auth", () => ({
   discoverScopes: jest.fn().mockResolvedValue("read write" as never),
 }));
 
-import { discoverScopes } from "@/lib/auth";
+import { discoverScopes } from "../../lib/auth";
 
 // Type the mocked functions properly
 const mockDiscoverAuthorizationServerMetadata =
@@ -681,7 +681,7 @@ describe("AuthDebugger", () => {
       const updateAuthState = jest.fn();
       const mockResourceMetadata = {
         resource: "https://example.com/mcp",
-        authorization_servers: ["https://custom-auth.example.com"],
+        authorization_servers: ["https://custom-auth.example.com/mcp/tenant"],
         bearer_methods_supported: ["header", "body"],
         resource_documentation: "https://example.com/mcp/docs",
         resource_policy_uri: "https://example.com/mcp/policy",
@@ -733,11 +733,17 @@ describe("AuthDebugger", () => {
         expect(updateAuthState).toHaveBeenCalledWith(
           expect.objectContaining({
             resourceMetadata: mockResourceMetadata,
-            authServerUrl: new URL("https://custom-auth.example.com"),
+            authServerUrl: new URL(
+              "https://custom-auth.example.com/mcp/tenant",
+            ),
             oauthStep: "client_registration",
           }),
         );
       });
+
+      expect(mockDiscoverAuthorizationServerMetadata).toHaveBeenCalledWith(
+        new URL("https://custom-auth.example.com/mcp/tenant"),
+      );
     });
 
     it("should handle protected resource metadata fetch failure gracefully", async () => {
